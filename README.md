@@ -2,10 +2,15 @@
 This repository contains various Integer Programming (IP) and Linear Programming (LP) methods to solve the Minimum Feedback Arc Set (MFAS) problem. The input file is an edge list with the format: source, destination, weight.
 
 Available Methods:
+
 Linear Programming
+
 Integer Programming
+
 Combined Integer + Linear Programming
+
 Integer Programming with Indicator Constraints
+
 How to Run:
 To execute the code, use the following command:
 
