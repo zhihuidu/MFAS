@@ -52,7 +52,7 @@ def build_ArrayDataStructure(csv_file_path):
     edges = []
     with open(csv_file_path, mode='r') as csvfile:
         csvreader = csv.reader(csvfile)
-        next(csvreader)
+        #next(csvreader)
 
         for row in csvreader:
             source, target, weight = row
@@ -157,7 +157,7 @@ def solve_fas_with_weighted_ip(graph,edge_flag,initial=False,checkpoint_file=Non
     # Initialize the Gurobi model
     model = Model("FeedbackArcSet_Weighted_IP")
  
-    model.setParam('OutputFlag', 1)  # Silent mode
+    model.setParam('OutputFlag', 0)  # Silent mode
 
     '''
     model.setParam('TimeLimit', 216000)    # Set a time limit of 30 seconds
@@ -236,6 +236,8 @@ def solve_fas_with_weighted_ip(graph,edge_flag,initial=False,checkpoint_file=Non
             if x[(u, v)].X < 0.5 :
                 edge_flag[(u,v)]=0
                 removed_edges.append((u,v))
+                #print(f"x[({u},{v})]={x[(u,v)].X}")
+                #print(f"p[{u}]={p[u].X},p[{v}]={p[v].X}")
         for (u,v) in removed_edges:
               graph.remove_edge(u,v)
 
@@ -254,10 +256,15 @@ def process_graph(file_path,precondition):
     print(f"sum of weight={total}")
 
     edge_flag={(u,v):1 for (u,v) in edge_weights }
+    print(f"edge_flag is {edge_flag}")
     Init_flag=False
     if precondition==1:
         old_edge_flag=edge_flag.copy()
-        removed_weight=read_removed_edges("removed.csv",edge_flag )
+        if "test.csv" in file_path:
+            removed_weight=read_removed_edges("test_removed.csv",edge_flag )
+        else:
+            removed_weight=read_removed_edges("removed.csv",edge_flag )
+
         print(f"to here removed weight is {removed_weight}, percentage is {removed_weight/total*100}")
         generate_complete_removed_list(edge_flag,edge_weights)
         print(f"length of the complete removed list is {len(complete_removed_list)}")

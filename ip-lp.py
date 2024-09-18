@@ -51,7 +51,7 @@ def build_ArrayDataStructure(csv_file_path):
     edges = []
     with open(csv_file_path, mode='r') as csvfile:
         csvreader = csv.reader(csvfile)
-        next(csvreader)
+        #next(csvreader)
 
         for row in csvreader:
             source, target, weight = row
@@ -300,11 +300,13 @@ def process_graph(file_path,precondition):
     print(f"sum of weight={total}")
 
     edge_flag={(u,v):1 for (u,v) in edge_weights }
-    removed_weight=0
     Init_flag=False
     if precondition==1:
         old_edge_flag=edge_flag.copy()
-        removed_weight=read_removed_edges("removed.csv",edge_flag )
+        if "test.csv" in file_path:
+            removed_weight=read_removed_edges("test_removed.csv",edge_flag )
+        else:
+            removed_weight=read_removed_edges("removed.csv",edge_flag )
         print(f"to here removed weight is {removed_weight}, percentage is {removed_weight/total*100}")
         generate_complete_removed_list(edge_flag,edge_weights)
         print(f"length of the complete removed list is {len(complete_removed_list)}")
@@ -313,6 +315,7 @@ def process_graph(file_path,precondition):
 
     shG=G.copy()
 
+    removed_weight=0
     numcheckacyclic=0
     acyclic_flag=nx.is_directed_acyclic_graph(shG)
     while not acyclic_flag :

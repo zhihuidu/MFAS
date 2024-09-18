@@ -229,9 +229,13 @@ def process_graph(file_path,precondition):
 
     edge_flag={(u,v):1 for (u,v) in edge_weights }
     Init_flag=False
+    removed_weight=0
     if precondition==1:
         old_edge_flag=edge_flag.copy()
-        removed_weight=read_removed_edges("removed.csv",edge_flag )
+        if "test.csv" in file_path:
+            removed_weight=read_removed_edges("test_removed.csv",edge_flag )
+        else:
+            removed_weight=read_removed_edges("removed.csv",edge_flag )
         print(f"to here removed weight is {removed_weight}, percentage is {removed_weight/total*100}")
         generate_complete_removed_list(edge_flag,edge_weights)
         print(f"length of the complete removed list is {len(complete_removed_list)}")
