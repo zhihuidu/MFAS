@@ -25,9 +25,5 @@ python x.py test.csv 1
 ```
 Ensure the file containing the removed edges is named removed.csv.
 
-## Example Files:
-- **graph.csv: A large graph representing a real-world problem.**
-- **removed.csv: The file containing edges removed by other methods.**
-
 ## Output file:
 The output is the linear order of the vertices.
