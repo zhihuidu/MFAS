@@ -47,68 +47,6 @@ def generate_complete_removed_list(edge_flag,edge_weights):
 
 
 
-def read_num_pairs(file_path):
-    numpairs=2
-    mindistance=5
-    if os.path.exists(file_path):
-        with open(file_path,mode='r') as f:
-            csv_reader = csv.reader(f)
-            for row in csv_reader:
-                numpairs=int(row[0])
-                mindistance=int(row[1])
-    return numpairs,mindistance
-
-
-# Function to find the minimum cut using Edmonds-Karp algorithm
-def find_minimum_cut(graph, source, target):
-    # Compute the maximum flow and minimum cut
-    cut_value, partition = nx.minimum_cut(graph, source, target, capacity='weight', flow_func=nx.algorithms.flow.edmonds_karp)
-
-    reachable, non_reachable = partition
-    cut_edges = []
-
-    for u in reachable:
-        for v in graph[u]:
-            if v in non_reachable:
-                cut_edges.append((u, v, graph.edges[u, v]['weight']))
-
-    return cut_value, cut_edges
-
-
-
-
-# Function to perform spectral clustering on the graph
-def spectral_clustering_divide(graph, n_clusters=2):
-    # Get the adjacency matrix with weights
-    adj_matrix = nx.to_numpy_array(graph, weight='weight')
-
-    # Perform spectral clustering
-    sc = SpectralClustering(n_clusters=n_clusters, affinity='precomputed',
-                            assign_labels='discretize', random_state=42)
-    labels = sc.fit_predict(adj_matrix)
-
-    # Create subgraphs for each cluster
-    subgraphs = []
-    for i in range(n_clusters):
-        nodes_in_cluster = [node for node, label in enumerate(labels) if label == i]
-        subgraph = graph.subgraph(nodes_in_cluster)
-        subgraphs.append(subgraph)
-
-    return subgraphs, labels
-
-# Function to find and print the cut edges
-def find_cut_edges(graph, labels):
-    cut_edges = []
-    for u, v, data in graph.edges(data=True):
-        if labels[u] != labels[v]:
-            cut_edges.append((u, v, data['weight']))
-    return cut_edges
-
-
-
-
-
-
 #given a graph file in the csv format (each line is (source,destination, weight)), generate the graph data structure
 def build_ArrayDataStructure(csv_file_path):
     node_list = set()
@@ -163,12 +101,6 @@ def build_from_GraphAndFlag (G,edge_flag):
               shrunkG.add_edge(u,v,weight=data['weight'])
     return shrunkG
 
-def build_from_subvertexset(shG,smallcom,edge_flag):
-    smallG = nx.DiGraph()
-    for u, v, data in shG.edges(data=True):
-         if  u in smallcom and v in smallcom and edge_flag[(u,v)]==1:
-              smallG.add_edge(u,v,weight=data['weight'])
-    return smallG
 
 def build_from_EdgeList(edge_weights):
     G = nx.DiGraph()
@@ -187,12 +119,6 @@ def write_relabelled_nodes_to_file(mapping, output_file):
     with open(output_file, 'w') as f:
         for node, order in mapping.items():
             f.write(f"{node},{order}\n")
-
-def read_ID_Mapping(file_path):
-    df=pd.read_csv(file_path, header=None, names=['ID', 'Index'])
-    data_table = df.values.tolist()
-    data_dict = {key: value for key, value in data_table}
-    return data_dict
 
 def read_removed_edges(file_path,edge_flag):
     removed_weight=0
@@ -215,30 +141,6 @@ def write_removed_edges(output_file,edge_flag,edge_weights):
             if edge_flag[(u,v)]==0:
                 f.write(f"{u},{v},{edge_weights[(u,v)]}\n")
 
-def read_config(file_path):
-    with open(file_path,mode='r') as f:
-        csv_reader = csv.reader(f)
-        for row in csv_reader:
-            fixcyclelen=int(row[0])
-            mincyclelen=int(row[1])
-            numcycles=int(row[2])
-            maxcyclelen=int(row[3])
-            subcomponentsize=int(row[4])
-            heavysetsize=int(row[5])
-    return fixcyclelen,mincyclelen,numcycles,maxcyclelen,subcomponentsize,heavysetsize
-
-def read_time_limit(file_path):
-    time_limit=0
-    if os.path.exists(file_path):
-        with open(file_path,mode='r') as f:
-            csv_reader = csv.reader(f)
-            for row in csv_reader:
-                time_limit=int(row[0])
-    return time_limit 
-
-def write_config(fixcyclelen,mincyclelen,numcycles,maxcyclelen,subcomponentsize,heavysetsize,file_path):
-    with open(file_path, 'w') as f:
-            f.write(f"{fixcyclelen},{mincyclelen},{numcycles},{maxcyclelen},{subcomponentsize},{heavysetsize} \n")
 
 num=0
 
@@ -274,341 +176,6 @@ def solve_ip_scc(G,edge_flag,SuperG):
                     num+=1
     return removed_weight
 
-# call OpenMP C function to remove cycles in subgraph of G built from given vertex set nodes
-#maxlen,minlen are used to search circles with length in between
-#num_long_cycles is used to search total number of cycles beyond the above cycles
-#len_long_cycle is the largest long cycle size
-#edge_flag will be used in search and updated based on the search results
-def ompdfs_remove_cycle_edges(nodes,G, maxlen,minlen,num_long_cycles,len_long_cycle,time_limit,edge_flag):
-    removed_weight=0
-    global num
-
-    commandline=f"rm -f tmp-omp-file.csv tmp-omp-removed-edges.csv"
-    os.system(commandline)
-
-    # Create the subgraph
-    G_sub = G.subgraph(nodes).copy()
-
-    with open("tmp-omp-file.csv", 'w') as f:
-        for u, v, data in G_sub.edges(data=True):
-            if edge_flag[(u,v)]==1:
-               f.write(f"{u},{v},{data['weight']}\n")
-    # search cycles in the subgraph
-    commandline=f"./subompdfs tmp-omp-file.csv {maxlen} 0 {minlen} {num_long_cycles} {len_long_cycle} {time_limit}"
-    if os.system(commandline)!=0 :
-        print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
-        print("There is an error during call subompdfs")
-        print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n")
-
-    if os.path.exists("tmp-omp-removed-edges.csv"):
-        with open("tmp-omp-removed-edges.csv",mode='r') as f:
-            csv_reader = csv.reader(f)
-            for row in csv_reader:
-                source = int(row[0])
-                dest = int(row[1])
-                weight = int(row[2])  
-                if edge_flag[(source,dest)]==1:
-                    edge_flag[(source,dest)]=0
-                    removed_weight+=weight
-                    num+=1
-    return removed_weight 
-
-def sccdfs_remove_cycle_edges(nodes,edge_weights,out_adj,edge_flag):
-    oldnum=num
-    removed_weight=0
-    def dfs(node, stack, rec_stack ):
-        global num
-        nonlocal removed_weight
-        rec_stack.add(node)
-        stack.append(node)
-        for neighbor, weight in out_adj[node]:
-            if neighbor not in nodes :
-                continue
-
-            if neighbor in rec_stack :
-                if edge_flag[(node, neighbor)]==0:
-                     continue
-                cycle = stack[stack.index(neighbor):] + [neighbor]
-                cycle_edges=[]
-                skip=0
-                for i in range(len(cycle) - 1) :
-                     if edge_flag[(cycle[i], cycle[i + 1])]==1:
-                          cycle_edges.append((cycle[i], cycle[i + 1]))      
-                     else:
-                         skip=1
-                         break
-                if skip==0:
-                    cycle_weights=[]
-                    print(f"find cycle len is {len(cycle)} with vertices {cycle}")
-                    for u, v in cycle_edges:
-                        cycle_weights.append((u,v,edge_weights[(u,v)]))
-                    min_edge = min(cycle_weights, key=lambda x: x[2])
-                    removed_weight+=min_edge[2]
-                    #removed_edges.add(min_edge)
-                    print(f"removed {num+1} edges= {min_edge}")
-                    num=num+1
-                    edge_flag[(min_edge[0],min_edge[1])]=0
-            else:
-                    dfs(neighbor, stack, rec_stack)
-                    if neighbor in nodes:
-                         nodes.remove(neighbor)
-        restorenode=stack.pop()
-        rec_stack.remove(node)
-        if node in nodes:
-            nodes.remove(node)
-        return False
-    
-    removed_edges = set()
-    rec_stack = set()
-    removed_weight=0
-    print(f"start from node {nodes[0]} and we have {len(nodes)} nodes")
-    while len(nodes)>0: 
-        node = nodes[0]
-        #print(f"start from node {node} and we have {len(nodes)} nodes now")
-        #print(f"enter dfs")
-        dfs(node, [], rec_stack)
-        if node in nodes:
-            nodes.remove(node)
-
-
-    return removed_weight 
-
-def again_dfs_remove_cycle_edges(nodes,edge_weights,out_adj,edge_flag):
-    removed_edges = set()
-    def dfs(node, stack,  rec_stack):
-        global num
-        nonlocal removed_weight
-        nonlocal tovisit
-        rec_stack.add(node)
-        stack.append(node)
-        for neighbor, weight in out_adj[node]:
-            if neighbor in rec_stack :
-                if edge_flag[(node, neighbor)]==0:
-                     continue
-                cycle = stack[stack.index(neighbor):] + [neighbor]
-                cycle_edges=[]
-                skip=0
-                for i in range(len(cycle) - 1) :
-                     if edge_flag[(cycle[i], cycle[i + 1])]==1:
-                          cycle_edges.append((cycle[i], cycle[i + 1]))      
-                     else:
-                         skip=1
-                         break
-                if skip==0:
-                    cycle_weights=[]
-                    print(f"find cycle len is {len(cycle)} with vertices {cycle}")
-                    for u, v in cycle_edges:
-                        cycle_weights.append((u,v,edge_weights[(u,v)]))
-                    min_edge = min(cycle_weights, key=lambda x: x[2])
-                    removed_weight+=min_edge[2]
-                    #removed_edges.add(min_edge)
-                    print(f"removed {num+1} edges {min_edge}")
-                    num=num+1
-                    edge_flag[(min_edge[0],min_edge[1])]=0
-            elif neighbor not in tovisit:
-                    dfs(neighbor, stack, rec_stack)
-                    if neighbor in tovisit:
-                         tovisit.remove(neighbor)
-        rec_stack.remove(node)
-        restorenode=stack.pop()
-        if node in tovisit:
-                         tovisit.remove(node)
-        #visited.remove(restorenode)
-        return False
-    
-
-    # Open the CSV file
-    print(f"read removed edges file removed.txt")
-    removed_weight=0
-    with open('removed.txt', 'r') as file:
-              reader = csv.reader(file)
-              for row in reader:
-                 x1,x2,x3  = row # Strip any leading/trailing whitespace
-                 x11,x12=x1.split(maxsplit=1)
-                 x12=int(x12)
-                 x2=int(x2)
-                 if edge_flag[(x12,x2)] ==1:
-                     edge_flag[(x12,x2)] = 0
-                     removed_weight+=edge_weights[(x12,x2)]
-
-    print(f"after read removed edges, weight={removed_weight}, remained={41912141-removed_weight} dfs again")
-    return removed_weight 
-    iternum=0
-    new_removed_weight=removed_weight
-    while iternum ==0 :
-        visited = set()
-        rec_stack = set()
-        tovisit =nodes.copy()
-        random.shuffle(tovisit)
-        while len(tovisit)>0:
-            node = tovisit.pop(0)
-            print(f"start from node {node} and we have {len(tovisit)} nodes now")
-            if node not in visited:
-                dfs(node, [], rec_stack)
-            if node in tovisit:
-                tovisit.remove(node)
-        new_removed_weight = sum(w for u, v,w in removed_edges)
-        removed_weight += new_removed_weight
-        iternum=iternum+1
-    print("finish  again bfs")
-    return removed_weight 
-
-# Normalize distributions to get probabilities
-def normalize_distribution(distribution):
-    total = sum(distribution.values())
-    return {k: v / total for k, v in distribution.items()}
-
-# Calculate min, max, and average values
-def calculate_stats(distribution):
-    keys = list(distribution.keys())
-    values = list(distribution.values())
-    min_val = min(keys)
-    max_val = max(keys)
-    mid_val= (min_val+max_val)/2
-    val_4_3= max_val-(min_val+max_val)/4
-    avg_val = sum(k * v for k, v in distribution.items())
-    total_key  = sum(k  for k, v in distribution.items())
-    above_mid = sum(k for k, v in distribution.items() if k>mid_val) 
-    above_4_3 = sum(k for k, v in distribution.items() if k>val_4_3) 
-    return min_val, max_val, avg_val/total_key, mid_val, above_mid, val_4_3, above_4_3
-
-def select_heavy_node(dic,stats,percentage,heavyset):
-     for node in dic:
-        if dic[node]>stats[1] * percentage:
-             heavyset.add(node)
-     
-def select_light_node(dic,stats,percentage,lightset):
-     for node in dic:
-        if dic[node]<stats[0] * percentage:
-             lightset.add(node)
-
-def calculate_light_set(G,percentage):
-    # Calculate in-degree, out-degree, in-weight, and out-weight
-    in_degrees = dict(G.in_degree())
-    out_degrees = dict(G.out_degree())
-    in_weights = {node: sum(data['weight'] for _, _, data in G.in_edges(node, data=True)) for node in G.nodes()}
-    out_weights = {node: sum(data['weight'] for _, _, data in G.out_edges(node, data=True)) for node in G.nodes()}
-
-    # Calculate the distributions
-    in_degree_distribution = Counter(in_degrees.values())
-    out_degree_distribution = Counter(out_degrees.values())
-    in_weight_distribution = Counter(in_weights.values())
-    out_weight_distribution = Counter(out_weights.values())
-
-    in_degree_stats = calculate_stats(in_degree_distribution)
-    out_degree_stats = calculate_stats(out_degree_distribution)
-    in_weight_stats = calculate_stats(in_weight_distribution)
-    out_weight_stats = calculate_stats(out_weight_distribution)
-
-    lightset=set()
-    select_light_node(in_degrees, in_degree_stats, percentage, lightset)
-    select_light_node(out_degrees, out_degree_stats, percentage, lightset)
-    #select_light_node(in_weights, in_weight_stats, percentage, lightset)
-    #select_light_node(out_weights, out_weight_stats, percentage, lightset)
-    return lightset
-
-def calculate_heavy_set(G,percentage):
-    # Calculate in-degree, out-degree, in-weight, and out-weight
-    in_degrees = dict(G.in_degree())
-    out_degrees = dict(G.out_degree())
-    in_weights = {node: sum(data['weight'] for _, _, data in G.in_edges(node, data=True)) for node in G.nodes()}
-    out_weights = {node: sum(data['weight'] for _, _, data in G.out_edges(node, data=True)) for node in G.nodes()}
-
-    # Calculate the distributions
-    in_degree_distribution = Counter(in_degrees.values())
-    out_degree_distribution = Counter(out_degrees.values())
-    in_weight_distribution = Counter(in_weights.values())
-    out_weight_distribution = Counter(out_weights.values())
-
-    in_degree_stats = calculate_stats(in_degree_distribution)
-    out_degree_stats = calculate_stats(out_degree_distribution)
-    in_weight_stats = calculate_stats(in_weight_distribution)
-    out_weight_stats = calculate_stats(out_weight_distribution)
-
-    heavyset=set()
-    select_heavy_node(in_degrees, in_degree_stats, percentage, heavyset)
-    select_heavy_node(out_degrees, out_degree_stats, percentage, heavyset)
-    #select_heavy_node(in_weights, in_weight_stats, percentage, heavyset)
-    #select_heavy_node(out_weights, out_weight_stats, percentage, heavyset)
-    return heavyset
-
-
-
-
-def remove_highdegree_lowweight_edge(G,p1,p2,edge_flag):
-    # Calculate in-degree, out-degree, in-weight, and out-weight
-    in_degrees = dict(G.in_degree())
-    out_degrees = dict(G.out_degree())
-    in_weights = {node: sum(data['weight'] for _, _, data in G.in_edges(node, data=True)) for node in G.nodes()}
-    out_weights = {node: sum(data['weight'] for _, _, data in G.out_edges(node, data=True)) for node in G.nodes()}
-
-    # Calculate the distributions
-    in_degree_distribution = Counter(in_degrees.values())
-    out_degree_distribution = Counter(out_degrees.values())
-    in_weight_distribution = Counter(in_weights.values())
-    out_weight_distribution = Counter(out_weights.values())
-
-    in_degree_stats = calculate_stats(in_degree_distribution)
-    out_degree_stats = calculate_stats(out_degree_distribution)
-    in_weight_stats = calculate_stats(in_weight_distribution)
-    out_weight_stats = calculate_stats(out_weight_distribution)
-    diff_in=in_degree_stats[1]-in_degree_stats[0]
-    diff_out=out_degree_stats[1]-out_degree_stats[0]
-
-    num_removed=0
-    for u,v,data in G.edges(data=True):
-        if in_degrees[u] >=p1 and out_degrees[v]>=p1 and data['weight'] <3:
-            edge_flag[(u,v)]=0
-            num_removed+=1
-            #print(f"({u},{v},{data['weight']} indegree={in_degrees[u]} max in degree {in_degree_stats[1]}, max out degree {out_degree_stats[1]} outdegree={out_degrees[v]},average in weight {in_weight_stats[2]} average out weight {out_weight_stats[2]}")
-    return num_removed
-
-
-def preremove_edge(G,weight,edge_flag):
-
-    num_added=0
-    for u,v,data in G.edges(data=True):
-        if data['weight'] <weight:
-            edge_flag[(u,v)]=0
-            num_added+=1
-    return num_added
-def addback_edge(G,weight,edge_flag):
-
-    num_added=0
-    for u,v,data in G.edges(data=True):
-        if data['weight'] <weight:
-            edge_flag[(u,v)]=1
-            num_added+=1
-    return num_added
-
-def addback_highdegree_lowweight_edge(G,p1,p2,edge_flag):
-    # Calculate in-degree, out-degree, in-weight, and out-weight
-    in_degrees = dict(G.in_degree())
-    out_degrees = dict(G.out_degree())
-    in_weights = {node: sum(data['weight'] for _, _, data in G.in_edges(node, data=True)) for node in G.nodes()}
-    out_weights = {node: sum(data['weight'] for _, _, data in G.out_edges(node, data=True)) for node in G.nodes()}
-
-    # Calculate the distributions
-    in_degree_distribution = Counter(in_degrees.values())
-    out_degree_distribution = Counter(out_degrees.values())
-    in_weight_distribution = Counter(in_weights.values())
-    out_weight_distribution = Counter(out_weights.values())
-
-    in_degree_stats = calculate_stats(in_degree_distribution)
-    out_degree_stats = calculate_stats(out_degree_distribution)
-    in_weight_stats = calculate_stats(in_weight_distribution)
-    out_weight_stats = calculate_stats(out_weight_distribution)
-    diff_in=in_degree_stats[1]-in_degree_stats[0]
-    diff_out=out_degree_stats[1]-out_degree_stats[0]
-
-    num_added=0
-    for u,v,data in G.edges(data=True):
-        if in_degrees[u] >=p1 and out_degrees[v]>=p1 and data['weight'] <3:
-            edge_flag[(u,v)]=1
-            num_added+=1
-            #print(f"({u},{v},{data['weight']} indegree={in_degrees[u]} max in degree {in_degree_stats[1]}, max out degree {out_degree_stats[1]} outdegree={out_degrees[v]},average in weight {in_weight_stats[2]} average out weight {out_weight_stats[2]}")
-    return num_added
-
 
 def solve_fas_with_weighted_lp(graph,edge_flag):
     # Initialize the Gurobi model
@@ -639,16 +206,7 @@ def solve_fas_with_weighted_lp(graph,edge_flag):
     for u, v in graph.edges():
         # p_u < p_v if edge (u, v) is kept (x_uv close to 1)
         model.addConstr(p[u] + 0.001 <= p[v] + M * (1 - x[(u, v)]), f"order_{u}_{v}")
-    '''
-    print("add p constraints")
-    # Constraints: Cycle elimination (no bidirectional edges, also relaxed)
-    for u, v in graph.edges():
-        if (v, u) in graph.edges():
-            # We can't have both (u, v) and (v, u) fully present, but fractions are allowed
-            model.addConstr(x[(u, v)] + x[(v, u)] <= 1, f"no_cycle_{u}_{v}")
 
-    print("add self loop constraints")
-    '''
     # Optimize the model
     model.optimize()
 
@@ -886,7 +444,6 @@ def process_graph(file_path,precondition=0):
     if precondition==1:
         old_edge_flag=edge_flag.copy()
         if "test.csv" in file_path:
-
             removed_weight=read_removed_edges("test_removed.csv",edge_flag )
         else :
             removed_weight=read_removed_edges("removed.csv",edge_flag )
