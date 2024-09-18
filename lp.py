@@ -244,7 +244,7 @@ def process_graph(file_path,precondition):
     print(f"up bound is {up_bound}")
     if up_bound != 0:
         removed_weight= sum(edge_weights[(u,v)]  for u, v in removed_edges )
-        if removed_weight/total < 0.15 :
+        if removed_weight/total < 0.45 :
             mapping={}
             for i in range(len(vertex_ordering)):
                 mapping[vertex_ordering[i]]=i
