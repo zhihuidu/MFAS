@@ -18,13 +18,15 @@ import matplotlib.pyplot as plt
 
 FileNameHead="ip"
 
+EarlyExit=False
+
+# Optional: Disable the local license check by unsetting GRB_LICENSE_FILE
+#os.environ.pop('GRB_LICENSE_FILE', None)
 # Set Gurobi license information using environment variables
 os.environ['GRB_WLSACCESSID'] = 'fb436391-3bb5-4b06-9a8c-66f0354b5011'
 os.environ['GRB_WLSSECRET'] = '37c29f28-6ae4-4a19-913d-6b8100964563'
 os.environ['GRB_LICENSEID'] = '2540055'
 
-# Optional: Disable the local license check by unsetting GRB_LICENSE_FILE
-os.environ.pop('GRB_LICENSE_FILE', None)
 
 
 
@@ -157,11 +159,13 @@ def save_checkpoint(model, filename):
 
 
 def solve_fas_with_weighted_ip(graph,edge_flag,initial=False,checkpoint_file=None):
+    global EarlyExit
     # Initialize the Gurobi model
     model = Model("FeedbackArcSet_Weighted_IP")
  
-    model.setParam('OutputFlag', 0)  # Silent mode
+    #model.setParam('OutputFlag', 0)  # Silent mode
 
+    model.setParam('TimeLimit', 86400)    # Set a time limit of 3600*24 seconds
     '''
     model.setParam('TimeLimit', 216000)    # Set a time limit of 30 seconds
     # Set parameters to prioritize speed over optimality
@@ -202,12 +206,13 @@ def solve_fas_with_weighted_ip(graph,edge_flag,initial=False,checkpoint_file=Non
     print(f"add {(graph.number_of_edges())} p constraints")
 
 
-    if checkpoint_file:
+    if checkpoint_file != None:
+        print(f"Update the model")
+        model.update()
         print(f"Loading checkpoint from {checkpoint_file}")
         model.read(checkpoint_file)
 
-        # Optimize the model
-        model.optimize()
+        print(f"Starting new optimization")
 
     else:
 
@@ -216,14 +221,16 @@ def solve_fas_with_weighted_ip(graph,edge_flag,initial=False,checkpoint_file=Non
                 x[(u, v)].start = 1  # Set initial value for the edge variable
             for (u, v) in complete_removed_list:
                 if graph.has_edge(u,v):
-                    x[(u, v)].start = 0  # Set initial value for the edge variable
-        # Optimize the model
-        model.optimize()
+                   x[(u, v)].start = 0  # Set initial value for the edge variable
 
-        # Save checkpoint if optimization is interrupted
-        if model.status == GRB.INTERRUPTED or model.status == GRB.TIME_LIMIT:
-            save_checkpoint(model, 'ip1checkpoint.mst')
-
+    # Optimize the model
+    model.optimize()
+    # Save checkpoint if optimization is interrupted
+    if model.status == GRB.INTERRUPTED or model.status == GRB.TIME_LIMIT:
+            print(f"write model")
+            model.write('ipcheckpoint.sol')
+            EarlyExit=True
+            return 0
 
     print("after optimization")
 
@@ -250,7 +257,8 @@ def solve_fas_with_weighted_ip(graph,edge_flag,initial=False,checkpoint_file=Non
 
 
 
-def process_graph(file_path,precondition):
+def process_graph(file_path,precondition,checkpointfile):
+    global EarlyExit
     print(f"read data")
     node_list, edge_weights, in_edges, out_edges= build_ArrayDataStructure(file_path)
     G=build_from_EdgeList(edge_weights)
@@ -259,7 +267,6 @@ def process_graph(file_path,precondition):
     print(f"sum of weight={total}")
 
     edge_flag={(u,v):1 for (u,v) in edge_weights }
-    print(f"edge_flag is {edge_flag}")
     Init_flag=False
     if precondition==1:
         old_edge_flag=edge_flag.copy()
@@ -297,27 +304,36 @@ def process_graph(file_path,precondition):
             print(f"{numcheckacyclic} check, handle the {numcomponent}th component with size {len(component)}")
             G_sub = shG.subgraph(component).copy()
 
-            if 1==1:
+            if len(component)<1000 :
                 try:
-                     removed_weight1=solve_fas_with_weighted_ip(G_sub,edge_flag,Init_flag,None)
-                     if removed_weight1==0:
-                         acyclic_flag=True
-                         removed_weight=0
-                         break
-                     else :
-                         if nx.is_directed_acyclic_graph(G_sub):
+                     removed_weight1=solve_fas_with_weighted_ip(G_sub,edge_flag,False,None)
+                     removed_weight+=removed_weight1
+                     print(f"The {numcomponent}th component, removed weight is {removed_weight1}, totally removed {removed_weight}, percentage is {removed_weight/total*100}\n")
+                     if EarlyExit:
+                         return 0
+                except ValueError as e:
+                     print(f"Caught an error  {e}")
+            else:
+                try:
+                     removed_weight1=0
+                     if checkpointfile == None:
+                         removed_weight1=solve_fas_with_weighted_ip(G_sub,edge_flag,precondition,None)
+                     else:
+                         removed_weight1=solve_fas_with_weighted_ip(G_sub,edge_flag,False,"ipcheckpoint.sol")
+                     if EarlyExit:
+                         return 0
+
+                     if nx.is_directed_acyclic_graph(G_sub):
                              print("the subgraph becomes acyclic graph")
-                         else:
+                     else:
                              print("still has loop, wrong")
                      removed_weight+=removed_weight1
                      print(f"The {numcomponent}th component, removed weight is {removed_weight1}, totally removed {removed_weight}, percentage is {removed_weight/total*100}\n")
                 except ValueError as e:
                      print(f"Caught an error  {e}")
-               
 
         shG=build_from_EdgeAndFlag(edge_weights,edge_flag)
         acyclic_flag=nx.is_directed_acyclic_graph(shG)
-
     if acyclic_flag:
         print(f"relabel dag")
         shG=build_from_EdgeAndFlag(edge_weights,edge_flag)
@@ -334,5 +350,11 @@ def process_graph(file_path,precondition):
 
 
 file_path = sys.argv[1]
-precondition=int(sys.argv[2])
-process_graph(file_path,precondition)
+precondition=False
+checkpoint=None
+if len(sys.argv)>2:
+    precondition=int(sys.argv[2])
+    if len(sys.argv)>3:
+        checkpoint=sys.argv[3]
+
+process_graph(file_path,precondition,checkpoint)

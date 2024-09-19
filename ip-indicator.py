@@ -18,6 +18,7 @@ import matplotlib.pyplot as plt
 
 FileNameHead="ip-indicator"
 
+EarlyExit=False
 
 # Set Gurobi license information using environment variables
 os.environ['GRB_WLSACCESSID'] = 'fb436391-3bb5-4b06-9a8c-66f0354b5011'
@@ -25,7 +26,7 @@ os.environ['GRB_WLSSECRET'] = '37c29f28-6ae4-4a19-913d-6b8100964563'
 os.environ['GRB_LICENSEID'] = '2540055'
 
 # Optional: Disable the local license check by unsetting GRB_LICENSE_FILE
-os.environ.pop('GRB_LICENSE_FILE', None)
+#os.environ.pop('GRB_LICENSE_FILE', None)
 
 
 removed_list=[]
@@ -349,11 +350,13 @@ def solve_indicator(graph,edge_flag):
     return removed_weight
 
 
-def solve_indicator_half_linear(graph,edge_flag,initial=False):
+def solve_indicator_half_linear(graph,edge_flag,initial=False,checkpoint_file=None):
+    global EarlyExit
     # Initialize the Gurobi model
     model = gp.Model("MaxWeightDirectedGraph")
     #model.setParam('OutputFlag', 0)  # Silent mode
 
+    model.setParam('TimeLimit', 172800)    # Set a time limit of cw6400*48 seconds
     '''
     # Set parameters to prioritize speed over optimality
     model.setParam('MIPGap', 0.1)      # Allow a 10% optimality gap
@@ -398,22 +401,37 @@ def solve_indicator_half_linear(graph,edge_flag,initial=False):
 
     print(f"add objective")
 
+    if checkpoint_file != None:
+        print(f"Update the model")
+        model.update()
+        print(f"Loading checkpoint from {checkpoint_file}")
+        model.read(checkpoint_file)
+        print(f"Starting new optimization")
 
-    if initial:
-        for u, v in graph.edges():
+    else:
+
+        if initial:
+            for u, v in graph.edges():
                 x[(u, v)].start = 1  # Set initial value for the edge variable
-        for (u, v) in complete_removed_list:
-            if graph.has_edge(u,v):
-                x[(u, v)].start = 0  # Set initial value for the edge variable
-
-
-
+            for (u, v) in complete_removed_list:
+                if graph.has_edge(u,v):
+                    x[(u, v)].start = 0  # Set initial value for the edge variable
 
 
     # Optimize the model
     model.optimize()
 
     print(f"optimization")
+
+
+    # Save checkpoint if optimization is interrupted
+    if model.status == GRB.INTERRUPTED or model.status == GRB.TIME_LIMIT:
+            print(f"write model")
+            model.write('ip-indcheckpoint.sol')
+            EarlyExit=True
+            return 0
+
+
     # Retrieve results
     removed_weight=0
     removededge=[]
@@ -432,7 +450,8 @@ def solve_indicator_half_linear(graph,edge_flag,initial=False):
 
 
 
-def process_graph(file_path,precondition=0):
+def process_graph(file_path,precondition=0,checkpoint_file=None):
+    global EarlyExit
     print(f"read data")
     node_list, edge_weights, in_edges, out_edges= build_ArrayDataStructure(file_path)
     G=build_from_EdgeList(edge_weights)
@@ -495,7 +514,13 @@ def process_graph(file_path,precondition=0):
                      print(f"Caught an error  {e}")
             else:
                 try:
-                     removed_weight1=solve_indicator_half_linear(G_sub,edge_flag,Init_flag)
+                     removed_weight1=0
+                     if checkpoint_file==None:
+                         removed_weight1=solve_indicator_half_linear(G_sub,edge_flag,Init_flag)
+                     else:
+                         removed_weight1=solve_indicator_half_linear(G_sub,edge_flag,False,"ip-indcheckpoint.sol")
+                     if EarlyExit:
+                         return 0
                      removed_weight+=removed_weight1
                      print(f"The {numcomponent}th component, removed weight is {removed_weight1}, totally removed {removed_weight}, percentage is {removed_weight/total*100}\n")
                      acyclic_flag=nx.is_directed_acyclic_graph(G_sub)
@@ -527,6 +552,12 @@ def process_graph(file_path,precondition=0):
 
 
 file_path = sys.argv[1]
-precondition = int(sys.argv[2])
-process_graph(file_path,precondition)
+precondition=False
+checkpoint=None
+if len(sys.argv)>2:
+    precondition=int(sys.argv[2])
+    if len(sys.argv)>3:
+        checkpoint=sys.argv[3]
+
+process_graph(file_path,precondition,checkpoint)
 
