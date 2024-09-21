@@ -294,7 +294,7 @@ def solve_fas_with_weighted_ip(graph,edge_flag):
 
 
 
-def process_graph(file_path,precondition):
+def process_graph(file_path,precondition=0,checkpoint_file=None):
     print(f"read data")
     node_list, edge_weights, in_edges, out_edges= build_ArrayDataStructure(file_path)
     G=build_from_EdgeList(edge_weights)
@@ -379,5 +379,11 @@ def process_graph(file_path,precondition):
 
 
 file_path = sys.argv[1]
-precondition=int(sys.argv[2])
-process_graph(file_path,precondition)
+precondition=0
+checkpoint=None
+if len(sys.argv)>2:
+    precondition=int(sys.argv[2])
+    if len(sys.argv)>3:
+        checkpoint=sys.argv[3]
+
+process_graph(file_path,precondition,checkpoint)

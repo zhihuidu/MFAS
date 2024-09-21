@@ -221,7 +221,7 @@ def solve_fas_with_weighted_lp(graph,initial=False,checkpoint_file=None):
 
 
 
-def process_graph(file_path,precondition):
+def process_graph(file_path,precondition=0,checkpoint_file=None):
     print(f"read data")
     node_list, edge_weights, in_edges, out_edges,sorted_edges = build_ArrayDataStructure(file_path)
     G=build_from_EdgeList(edge_weights)
@@ -266,6 +266,12 @@ def process_graph(file_path,precondition):
                     f.write(f"{u},{v},{G[u][v]['weight']}\n")
 
 file_path = sys.argv[1]
-precondition=int(sys.argv[2])
-process_graph(file_path,precondition)
+precondition=0
+checkpoint=None
+if len(sys.argv)>2:
+    precondition=int(sys.argv[2])
+    if len(sys.argv)>3:
+        checkpoint=sys.argv[3]
+
+process_graph(file_path,precondition,checkpoint)
 
