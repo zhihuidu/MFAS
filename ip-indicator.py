@@ -527,7 +527,7 @@ def process_graph(file_path,precondition=0):
 
 
 file_path = sys.argv[1]
-precondition=False
+precondition=0
 checkpoint=None
 if len(sys.argv)>2:
     precondition=int(sys.argv[2])
