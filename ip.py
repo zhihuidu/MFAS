@@ -2,6 +2,8 @@ import matplotlib.pyplot as plt
 from collections import Counter
 import pandas as pd
 import networkx as nx
+from networkx.algorithms.cycles import simple_cycles
+import gurobipy as gp
 from gurobipy import GRB,Model
 import sys
 import os
@@ -156,13 +158,29 @@ def save_checkpoint(model, filename):
 
 
 
+# Define a callback function
+def mycallback(model, where):
+    if where == GRB.Callback.MIPSOL:  # A new feasible solution is found
+        # Get the current solution
+        solution = model.cbGetSolution(model.getVars())
+
+        # Write the solution to a file
+        with open("feasible_solution.sol", "w") as f:
+            for v in model.getVars():
+                f.write(f"{v.varName} {model.cbGetSolution(v)}\n")
+        print("Feasible solution written to feasible_solution.sol")
+
+
 def solve_fas_with_weighted_ip(graph,edge_flag,initial=False,checkpoint_file=None):
     global EarlyExit
     # Initialize the Gurobi model
     model = Model("FeedbackArcSet_Weighted_IP")
  
     #model.setParam('OutputFlag', 0)  # Silent mode
+    #model.setParam('Threads', 128)
 
+
+    model.setParam('TimeLimit', 172800)    # Set a time limit of 3600*24 seconds
     '''
     model.setParam('TimeLimit', 216000)    # Set a time limit of 30 seconds
     # Set parameters to prioritize speed over optimality
@@ -221,7 +239,7 @@ def solve_fas_with_weighted_ip(graph,edge_flag,initial=False,checkpoint_file=Non
                    x[(u, v)].start = 0  # Set initial value for the edge variable
 
     # Optimize the model
-    model.optimize()
+    model.optimize(mycallback)
     # Save checkpoint if optimization is interrupted
     if model.status == GRB.INTERRUPTED or model.status == GRB.TIME_LIMIT:
             print(f"write model")
@@ -301,7 +319,7 @@ def process_graph(file_path,precondition,checkpointfile):
             print(f"{numcheckacyclic} check, handle the {numcomponent}th component with size {len(component)}")
             G_sub = shG.subgraph(component).copy()
 
-            if len(component)<10 :
+            if len(component)<1000 :
                 try:
                      removed_weight1=solve_fas_with_weighted_ip(G_sub,edge_flag,False,None)
                      removed_weight+=removed_weight1
@@ -347,7 +365,7 @@ def process_graph(file_path,precondition,checkpointfile):
 
 
 file_path = sys.argv[1]
-precondition=0
+precondition=False
 checkpoint=None
 if len(sys.argv)>2:
     precondition=int(sys.argv[2])

@@ -242,7 +242,7 @@ def solve_fas_with_weighted_ip(graph,edge_flag):
     model = Model("FeedbackArcSet_Weighted_IP")
     epsilon = 1e-6  # A small constant to enforce strict inequality
  
-    model.setParam('OutputFlag', 0)  # Silent mode
+    #model.setParam('OutputFlag', 0)  # Silent mode
     # Variables: x_uv for each edge (binary), and p_v for each vertex (position)
     x = {}
     p = {}
@@ -350,14 +350,29 @@ def solve_indicator(graph,edge_flag):
     return removed_weight
 
 
+# Define a callback function
+def mycallback(model, where):
+    if where == GRB.Callback.MIPSOL:  # A new feasible solution is found
+        # Get the current solution
+        solution = model.cbGetSolution(model.getVars())
+
+        # Write the solution to a file
+        with open("feasible_solution.sol", "w") as f:
+            for v in model.getVars():
+                f.write(f"{v.varName} {model.cbGetSolution(v)}\n")
+        print("Feasible solution written to feasible_solution.sol")
+
+
 def solve_indicator_half_linear(graph,edge_flag,initial=False,checkpoint_file=None):
     global EarlyExit
     # Initialize the Gurobi model
     model = gp.Model("MaxWeightDirectedGraph")
+    #model.setParam('Threads', 64)
+
     #model.setParam('OutputFlag', 0)  # Silent mode
 
+    model.setParam('TimeLimit', 172800)    # Set a time limit of 3600*48 seconds
     '''
-    model.setParam('TimeLimit', 172800)    # Set a time limit of cw6400*48 seconds
     # Set parameters to prioritize speed over optimality
     model.setParam('MIPGap', 0.1)      # Allow a 10% optimality gap
     #model.setParam('TimeLimit', 7200)    # Set a time limit of 30 seconds
@@ -419,7 +434,7 @@ def solve_indicator_half_linear(graph,edge_flag,initial=False,checkpoint_file=No
 
 
     # Optimize the model
-    model.optimize()
+    model.optimize(mycallback)
 
     print(f"optimization")
 
