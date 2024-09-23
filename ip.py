@@ -164,6 +164,9 @@ def mycallback(model, where):
         # Get the current solution
         solution = model.cbGetSolution(model.getVars())
 
+        os.system('cp -f feasible_solution.sol old_feasible_solution.sol')
+        os.system('rm -f feasible_solution.sol')
+
         # Write the solution to a file
         with open("feasible_solution.sol", "w") as f:
             for v in model.getVars():
