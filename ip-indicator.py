@@ -15,6 +15,7 @@ from itertools import permutations
 import numpy as np
 from sklearn.cluster import SpectralClustering
 import matplotlib.pyplot as plt
+from pathlib import Path
 
 FileNameHead="ip-indicator"
 
@@ -356,10 +357,10 @@ def mycallback(model, where):
         # Get the current solution
         solution = model.cbGetSolution(model.getVars())
 
+        # Write the solution to a file
         os.system('cp -f feasible_solution.sol old_feasible_solution.sol')
         os.system('rm -f feasible_solution.sol')
 
-        # Write the solution to a file
         with open("feasible_solution.sol", "w") as f:
             for v in model.getVars():
                 f.write(f"{v.varName} {model.cbGetSolution(v)}\n")
@@ -372,9 +373,10 @@ def solve_indicator_half_linear(graph,edge_flag,initial=False,checkpoint_file=No
     model = gp.Model("MaxWeightDirectedGraph")
     #model.setParam('Threads', 64)
 
+    #model.setParam('Method', 3) #open it if the machine has many cores
     #model.setParam('OutputFlag', 0)  # Silent mode
 
-    model.setParam('TimeLimit', 172800)    # Set a time limit of 3600*48 seconds
+    #model.setParam('TimeLimit', 172800)    # Set a time limit of 3600*48 seconds
     '''
     # Set parameters to prioritize speed over optimality
     model.setParam('MIPGap', 0.1)      # Allow a 10% optimality gap
@@ -423,7 +425,21 @@ def solve_indicator_half_linear(graph,edge_flag,initial=False,checkpoint_file=No
         print(f"Update the model")
         model.update()
         print(f"Loading checkpoint from {checkpoint_file}")
-        model.read(checkpoint_file)
+        if Path("ip-indcheckpoint.sol").exists():
+            model.read('ip-indcheckpoint.sol')
+        model.update()
+        if Path("ip-indcheckpoint.mst").exists():
+            model.read('ip-indcheckpoint.mst')
+        model.update()
+        if Path("ip-indcheckpoint.hnt").exists():
+            model.read('ip-indcheckpoint.hnt')
+        model.update()
+        if Path("ip-indcheckpoint.ord").exists():
+            model.read('ip-indcheckpoint.ord')
+        model.update()
+        if Path("ip-indcheckpoint.attr").exists():
+            model.read('ip-indcheckpoint.attr')
+        model.update()
         print(f"Starting new optimization")
 
     else:
@@ -445,7 +461,14 @@ def solve_indicator_half_linear(graph,edge_flag,initial=False,checkpoint_file=No
     # Save checkpoint if optimization is interrupted
     if model.status == GRB.INTERRUPTED or model.status == GRB.TIME_LIMIT:
             print(f"write model")
+            model.update()
             model.write('ip-indcheckpoint.sol')
+            model.update()
+            model.write('ip-indcheckpoint.mst')
+            model.update()
+            model.write('ip-indcheckpoint.hnt')
+            model.update()
+            model.write('ip-indcheckpoint.attr')
             EarlyExit=True
             return 0
 
