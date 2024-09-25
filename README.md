@@ -27,3 +27,12 @@ Ensure the file containing the removed edges is named removed.csv.
 
 ## Output file:
 The output is the linear order of the vertices.
+
+## Feasible Solution:
+Our IP method will output the latest feasible solution during its optimization. To evaluate the result of the feasible solution, we can run the code like this:
+
+```bash
+python f.py graph.csv feasible_solution.sol
+```
+
+
