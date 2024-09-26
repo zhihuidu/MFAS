@@ -17,7 +17,7 @@ from sklearn.cluster import SpectralClustering
 import matplotlib.pyplot as plt
 from pathlib import Path
 
-FileNameHead="ip-indicator"
+FileNameHead="feasible"
 
 EarlyExit=False
 
@@ -595,9 +595,10 @@ def process_graph(file_path,feasible_file):
         shG=build_from_EdgeAndFlag(edge_weights,edge_flag)
         acyclic_flag=nx.is_directed_acyclic_graph(shG)
 
-    print(f"Totally removed {removed_weight}, percentage is {removed_weight/total*100}, remaining {total-removed_weight}\n")
-    print(f"relabel dag")
     shG=build_from_EdgeAndFlag(edge_weights,edge_flag)
+    forward_weight = sum(d['weight'] for u, v, d in shG.edges(data=True))
+    print(f"forward weight is {forward_weight}, percentage is {forward_weight/total*100}\n")
+    print(f"relabel dag")
     acyclic_flag=nx.is_directed_acyclic_graph(shG)
     if acyclic_flag:
         mapping = relabel_dag(shG)
