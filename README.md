@@ -25,6 +25,16 @@ python x.py test.csv 1
 ```
 Ensure the file containing the removed edges is named removed.csv.
 
+## Warm starting:
+The IP method may run for a long time for a large graph, such as graph.csv. We can split the total optimization procedure into several periods and write the model for continuous optimization. To restart an optimization from last time, we can run the code like this: 
+
+```bash
+python ip.py graph.csv 0 ipcheckpoint.sol
+or
+python ip-indicator.py graph.csv 0 ip-indcheckpoint.sol
+```
+
+
 ## Output file:
 The output is the linear order of the vertices.
 
