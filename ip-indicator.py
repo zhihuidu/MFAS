@@ -264,21 +264,15 @@ def solve_fas_with_weighted_ip(graph,edge_flag):
     for u, v in graph.edges():
         # If x_uv = 1 (edge is kept), then p_u must come before p_v
         model.addConstr(p[u]+ 1 <= p[v] + M * (1 - x[(u, v)]), f"order_{u}_{v}")
-    '''
-    # Constraints: For every bidirectional edge (u, v) and (v, u), ensure that at least one is removed
-    for u, v in graph.edges():
-        if (v, u) in graph.edges():
-            model.addConstr(x[(u, v)] + x[(v, u)] <= 1, f"no_cycle_2_{u}_{v}")
-'''
     # Optimize the model
     model.optimize()
 
     # Retrieve the final optimal removed edges (where x_uv = 0, meaning edge is removed)
     #removed_edges = [(u, v) for u, v in graph.edges() if x[(u, v)].x < 0.5]
-    removed_weight = sum(graph[u][v]['weight']  for u, v in graph.edges()  if x[(u, v)].x < 0.5 )
+    removed_weight = sum(graph[u][v]['weight']  for u, v in graph.edges()  if x[(u, v)].X < 0.5 )
     removededge=[]
     for u, v in graph.edges() :
-        if x[(u, v)].x < 0.5:
+        if x[(u, v)].X < 0.5:
             edge_flag[(u,v)]=0
             removededge.append((u,v))
 
@@ -340,7 +334,7 @@ def solve_indicator(graph,edge_flag):
     for u, v in graph.edges() :
         print(f"x[({u},{v})].x is {x[(u,v)].x}")
         print(f"p[{u}] is {p[u].x}, p[{v}] is {p[v].x}")
-        if x[(u, v)].x < 0.5:
+        if x[(u, v)].X < 0.5:
             edge_flag[u,v]=0
             removed_weight+=graph[u][v]['weight']
             removededge.append((u,v))
@@ -370,14 +364,23 @@ def mycallback(model, where):
 def solve_indicator_half_linear(graph,edge_flag,initial=False,checkpoint_file=None):
     global EarlyExit
     # Initialize the Gurobi model
-    model = gp.Model("MaxWeightDirectedGraph")
-    #model.setParam('Threads', 64)
+    model = gp.Model("MinWeightDirectedGraph")
+    model.setParam('Heuristics', 0.3)  # 30% of the time spent on heuristics
+    model.setParam('Cuts', 2)          # Moderate cut generation, larger cuts will be slow
+    model.setParam('AggFill', 2)
+    model.setParam('CutAggPasses', 3)  # More aggressive cutting
+    model.setParam('MIPFocus', 2)      # Focus on finding feasible solutions quickly,2 optimal,3 balance
+    model.setParam('Presolve', 2)      # Use aggressive presolve
+    model.setParam('ConcurrentMIP', 2)  # Run two algorithms in parallel
+    
+    model.setParam('Method', 3)
 
-    #model.setParam('Method', 3) #open it if the machine has many cores
-    #model.setParam('OutputFlag', 0)  # Silent mode
-
-    #model.setParam('TimeLimit', 172800)    # Set a time limit of 3600*48 seconds
     '''
+    model.setParam('Heuristics', 0.5)  # 30% of the time spent on heuristics
+    model.setParam('BarConvTol', 1e-4)  # More aggressive convergence tolerance
+    model.setParam('CutAggPasses', 3)  # More aggressive cutting
+    model.setParam('Heuristics', 0.3)  # 30% of the time spent on heuristics
+    
     # Set parameters to prioritize speed over optimality
     model.setParam('MIPGap', 0.1)      # Allow a 10% optimality gap
     #model.setParam('TimeLimit', 7200)    # Set a time limit of 30 seconds
@@ -399,7 +402,7 @@ def solve_indicator_half_linear(graph,edge_flag,initial=False,checkpoint_file=No
     M=len(graph.nodes())
     # Create continuous label variables for each node
     for v in graph.nodes():
-        p[v] = model.addVar(vtype=GRB.CONTINUOUS,lb=0,ub=M-1, name=f"p_{v}")
+        p[v] = model.addVar(vtype=GRB.CONTINUOUS,lb=0,ub=M, name=f"p_{v}")
 
     print(f"add p variable")
     # Create binary variables for each edge and add indicator constraints
